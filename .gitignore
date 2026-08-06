@@ -1,0 +1,34 @@
+# Vagrant'in makine kimligi ve yerel calisma durumu
+.vagrant/
+
+# Uptime Kuma calisan verileri ve yedekleri
+persistent/*
+!persistent/.gitignore
+
+# Gizli ortam dosyalari
+.env
+.env.*
+!.env.example
+
+# SSH ozel anahtarlari ve sertifikalar
+*.pem
+*.key
+id_rsa
+id_ed25519
+ansible/keys/*
+!ansible/keys/*.pub
+
+# Ansible gecici dosyalari
+*.retry
+
+# Editor ve isletim sistemi dosyalari
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Gecici dosyalar ve loglar
+*.log
+*.tmp
+*.swp
+*~
