@@ -1,0 +1,7 @@
+---
+- name: GitOps Controller | Zamanlayiciyi yeniden baslat
+  ansible.builtin.systemd_service:
+    name: gitops-deploy.timer
+    state: restarted
+    enabled: true
+    daemon_reload: true

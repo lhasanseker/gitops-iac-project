@@ -1,0 +1,12 @@
+---
+- name: Yerel GitOps kontrolcusunu hazirla
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+
+  vars:
+    gitops_controller_user: "{{ lookup('ansible.builtin.env', 'USER') }}"
+
+  roles:
+    - role: gitops_controller

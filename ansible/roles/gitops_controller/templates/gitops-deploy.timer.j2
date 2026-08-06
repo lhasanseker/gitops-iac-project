@@ -1,0 +1,12 @@
+[Unit]
+Description=GitOps ana dalini duzenli kontrol et
+
+[Timer]
+OnBootSec={{ gitops_controller_timer_on_boot }}
+OnUnitActiveSec={{ gitops_controller_timer_interval }}
+RandomizedDelaySec={{ gitops_controller_timer_random_delay }}
+Persistent=true
+Unit=gitops-deploy.service
+
+[Install]
+WantedBy=timers.target
