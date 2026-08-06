@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+readonly REPO_URL={{ gitops_controller_repo_url | quote }}
+readonly BRANCH={{ gitops_controller_branch | quote }}
+readonly ROOT_DIR={{ gitops_controller_root | quote }}
+readonly REPO_DIR={{ gitops_controller_repo_dir | quote }}
+readonly STATE_DIR={{ gitops_controller_state_dir | quote }}
+readonly STATE_FILE={{ gitops_controller_state_file | quote }}
+readonly INVENTORY_PATH={{ gitops_controller_inventory_path | quote }}
+readonly PLAYBOOK_PATH={{ gitops_controller_playbook_path | quote }}
+readonly HEALTH_URL={{ gitops_controller_health_url | quote }}
+readonly ANSIBLE_PLAYBOOK={{ gitops_controller_ansible_command.stdout | trim | quote }}
+
+STAGE_DIR=""
+
+cleanup() {
+  if [[ -n "${STAGE_DIR}" && "${STAGE_DIR}" == "${ROOT_DIR}"/stage.* ]]; then
+    rm -rf -- "${STAGE_DIR}"
+  fi
+}
+
+trap cleanup EXIT
+
+mkdir -p "${STATE_DIR}"
+exec 9>"${STATE_DIR}/deploy.lock"
+
+if ! flock -n 9; then
+  echo "Baska bir GitOps dagitimi calisiyor; bu tur atlandi."
+  exit 0
+fi
+
+if [[ ! -d "${REPO_DIR}/.git" ]]; then
+  echo "Git deposu bulunamadi: ${REPO_DIR}" >&2
+  exit 1
+fi
+
+actual_origin="$(git -C "${REPO_DIR}" remote get-url origin)"
+if [[ "${actual_origin}" != "${REPO_URL}" ]]; then
+  echo "Beklenmeyen Git origin adresi: ${actual_origin}" >&2
+  exit 1
+fi
+
+git -C "${REPO_DIR}" fetch --quiet --prune origin "${BRANCH}"
+target_commit="$(git -C "${REPO_DIR}" rev-parse "origin/${BRANCH}")"
+last_successful_commit=""
+
+if [[ -f "${STATE_FILE}" ]]; then
+  last_successful_commit="$(<"${STATE_FILE}")"
+fi
+
+if [[ "${target_commit}" == "${last_successful_commit}" ]]; then
+  echo "Yeni commit yok: ${target_commit}"
+  exit 0
+fi
+
+echo "GitOps dagitimi basladi: ${last_successful_commit:-ilk-kurulum} -> ${target_commit}"
+
+STAGE_DIR="$(mktemp -d "${ROOT_DIR}/stage.XXXXXX")"
+git -C "${REPO_DIR}" archive "${target_commit}" | tar -x -C "${STAGE_DIR}"
+
+inventory_file="${STAGE_DIR}/${INVENTORY_PATH}"
+playbook_file="${STAGE_DIR}/${PLAYBOOK_PATH}"
+
+if [[ ! -f "${inventory_file}" || ! -f "${playbook_file}" ]]; then
+  echo "Dagitim icin inventory veya playbook bulunamadi." >&2
+  exit 1
+fi
+
+"${ANSIBLE_PLAYBOOK}" \
+  -i "${inventory_file}" \
+  "${playbook_file}" \
+  --syntax-check
+
+"${ANSIBLE_PLAYBOOK}" \
+  -i "${inventory_file}" \
+  "${playbook_file}"
+
+curl -fsS --max-time 15 "${HEALTH_URL}" >/dev/null
+printf '%s\n' "${target_commit}" >"${STATE_FILE}"
+
+echo "GitOps dagitimi basarili: ${target_commit}"

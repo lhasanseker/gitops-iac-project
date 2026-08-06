@@ -1,0 +1,100 @@
+---
+- name: GitOps Controller | Calistiracak kullaniciyi dogrula
+  ansible.builtin.assert:
+    that:
+      - gitops_controller_user | length > 0
+      - gitops_controller_user != "root"
+    fail_msg: >-
+      Controller root olarak kurulmamalidir. Playbook'u sudo kullanmadan,
+      normal WSL kullanicinizla calistirin.
+
+- name: GitOps Controller | Kullanici hesabini kontrol et
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ gitops_controller_user }}"
+
+- name: GitOps Controller | SSH ozel anahtarini kontrol et
+  ansible.builtin.stat:
+    path: "{{ gitops_controller_private_key }}"
+  register: gitops_controller_private_key_status
+
+- name: GitOps Controller | SSH ozel anahtarinin varligini dogrula
+  ansible.builtin.assert:
+    that:
+      - gitops_controller_private_key_status.stat.exists
+      - gitops_controller_private_key_status.stat.isreg
+    fail_msg: >-
+      Ansible SSH anahtari bulunamadi: {{ gitops_controller_private_key }}.
+      inventory.ini ile ayni ozel anahtar yolunu kullandiginizdan emin olun.
+
+- name: GitOps Controller | Gerekli yerel paketler kurulu olsun
+  ansible.builtin.apt:
+    name:
+      - curl
+      - git
+      - tar
+      - util-linux
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: GitOps Controller | Ansible komutunun yolunu bul
+  ansible.builtin.command:
+    cmd: which ansible-playbook
+  become: false
+  register: gitops_controller_ansible_command
+  changed_when: false
+
+- name: GitOps Controller | Calisma klasorlerini olustur
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ gitops_controller_user }}"
+    group: "{{ gitops_controller_group }}"
+    mode: "0750"
+  loop:
+    - "{{ gitops_controller_root }}"
+    - "{{ gitops_controller_state_dir }}"
+
+- name: GitOps Controller | Ana dalin yerel kopyasini hazirla
+  ansible.builtin.git:
+    repo: "{{ gitops_controller_repo_url }}"
+    dest: "{{ gitops_controller_repo_dir }}"
+    version: "{{ gitops_controller_branch }}"
+    update: true
+    force: false
+  become_user: "{{ gitops_controller_user }}"
+
+- name: GitOps Controller | Dagitim scriptini olustur
+  ansible.builtin.template:
+    src: gitops-deploy.sh.j2
+    dest: /usr/local/sbin/gitops-deploy
+    owner: root
+    group: root
+    mode: "0755"
+  notify: GitOps Controller | Zamanlayiciyi yeniden baslat
+
+- name: GitOps Controller | Systemd servis dosyasini olustur
+  ansible.builtin.template:
+    src: gitops-deploy.service.j2
+    dest: /etc/systemd/system/gitops-deploy.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: GitOps Controller | Zamanlayiciyi yeniden baslat
+
+- name: GitOps Controller | Systemd zamanlayici dosyasini olustur
+  ansible.builtin.template:
+    src: gitops-deploy.timer.j2
+    dest: /etc/systemd/system/gitops-deploy.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: GitOps Controller | Zamanlayiciyi yeniden baslat
+
+- name: GitOps Controller | Zamanlayici etkin ve calisiyor olsun
+  ansible.builtin.systemd_service:
+    name: gitops-deploy.timer
+    state: started
+    enabled: true
+    daemon_reload: true

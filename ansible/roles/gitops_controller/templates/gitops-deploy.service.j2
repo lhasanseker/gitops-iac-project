@@ -1,0 +1,17 @@
+[Unit]
+Description=Uptime Kuma GitOps pull deployment
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ gitops_controller_user }}
+Group={{ gitops_controller_group }}
+Environment=HOME={{ gitops_controller_user_home }}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+WorkingDirectory={{ gitops_controller_repo_dir }}
+ExecStart=/usr/local/sbin/gitops-deploy
+TimeoutStartSec=20min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
