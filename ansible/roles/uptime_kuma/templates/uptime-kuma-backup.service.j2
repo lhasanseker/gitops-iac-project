@@ -1,0 +1,8 @@
+[Unit]
+Description=Uptime Kuma veri yedegi
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/backup-uptime-kuma

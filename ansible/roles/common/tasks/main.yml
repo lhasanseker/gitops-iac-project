@@ -1,0 +1,32 @@
+---
+- name: Common | Kalici DNS servisini olustur
+  ansible.builtin.template:
+    src: gitops-dns.service.j2
+    dest: /etc/systemd/system/gitops-dns.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: common_dns_service_file
+
+- name: Common | Kalici DNS servisini etkinlestir ve uygula
+  ansible.builtin.systemd_service:
+    name: gitops-dns.service
+    enabled: true
+    daemon_reload: true
+    state: "{{ common_dns_service_file.changed | ternary('restarted', 'started') }}"
+
+- name: Common | SSH servisi etkin ve calisiyor olsun
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: started
+    enabled: true
+
+- name: Common | Ubuntu paket listesini guncelle
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Common | Temel paketler kurulu olsun
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present

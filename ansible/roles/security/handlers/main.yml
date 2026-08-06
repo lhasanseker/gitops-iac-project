@@ -1,0 +1,5 @@
+---
+- name: Security | Fail2ban servisini yeniden baslat
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: restarted

@@ -1,0 +1,4 @@
+---
+- name: Docker | Paket listesini yenile
+  ansible.builtin.apt:
+    update_cache: true

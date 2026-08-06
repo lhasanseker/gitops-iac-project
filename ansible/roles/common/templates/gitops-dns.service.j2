@@ -1,0 +1,14 @@
+[Unit]
+Description=GitOps VM DNS ayari
+Wants=network-online.target
+After=network-online.target systemd-resolved.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/resolvectl dns {{ ansible_facts["default_ipv4"]["interface"] }} {{ common_dns_servers | join(' ') }}
+ExecStart=/usr/bin/resolvectl domain {{ ansible_facts["default_ipv4"]["interface"] }} ~.
+ExecStart=/usr/bin/resolvectl flush-caches
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

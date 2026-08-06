@@ -1,0 +1,36 @@
+---
+- name: Nginx | Paketi kurulu olsun
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+
+- name: Nginx | Ana sayfasini olustur
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /var/www/html/index.html
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Nginx | Servisi calisiyor olsun
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Nginx | Uptime Kuma reverse proxy ayarini olustur
+  ansible.builtin.template:
+    src: default.conf.j2
+    dest: /etc/nginx/sites-available/default
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Nginx | Yapilandirmayi yeniden yukle
+
+- name: Nginx | Yapilandirmayi kontrol et
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+
+- name: Nginx | Bekleyen handler islemlerini calistir
+  ansible.builtin.meta: flush_handlers
