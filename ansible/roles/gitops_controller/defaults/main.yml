@@ -11,6 +11,9 @@ gitops_controller_repo_dir: "{{ gitops_controller_root }}/repository"
 gitops_controller_state_dir: /var/lib/gitops-controller
 gitops_controller_state_file: >-
   {{ gitops_controller_state_dir }}/last-successful-commit
+gitops_controller_target_host: 192.168.56.10
+gitops_controller_known_hosts_file: >-
+  {{ gitops_controller_state_dir }}/known_hosts
 gitops_controller_private_key: >-
   {{ gitops_controller_user_home }}/.ssh/gitops_iac_vagrant
 
