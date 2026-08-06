@@ -10,6 +10,8 @@ readonly STATE_FILE={{ gitops_controller_state_file | quote }}
 readonly INVENTORY_PATH={{ gitops_controller_inventory_path | quote }}
 readonly PLAYBOOK_PATH={{ gitops_controller_playbook_path | quote }}
 readonly HEALTH_URL={{ gitops_controller_health_url | quote }}
+readonly TARGET_HOST={{ gitops_controller_target_host | quote }}
+readonly KNOWN_HOSTS_FILE={{ gitops_controller_known_hosts_file | quote }}
 readonly ANSIBLE_PLAYBOOK={{ gitops_controller_ansible_command.stdout | trim | quote }}
 
 STAGE_DIR=""
@@ -70,7 +72,20 @@ if [[ ! -f "${inventory_file}" || ! -f "${playbook_file}" ]]; then
   echo "Dagitim icin inventory veya playbook bulunamadi." >&2
   exit 1
 fi
+known_hosts_tmp="${KNOWN_HOSTS_FILE}.tmp"
 
+if ! ssh-keyscan -T 10 -H "${TARGET_HOST}" >"${known_hosts_tmp}" \
+  || [[ ! -s "${known_hosts_tmp}" ]]; then
+  echo "Sunucunun SSH kimligi alinamadi: ${TARGET_HOST}" >&2
+  rm -f -- "${known_hosts_tmp}"
+  exit 1
+fi
+
+mv -f -- "${known_hosts_tmp}" "${KNOWN_HOSTS_FILE}"
+chmod 0600 "${KNOWN_HOSTS_FILE}"
+
+export ANSIBLE_SSH_ARGS="-C -o ControlMaster=auto -o ControlPersist=60s \
+-o UserKnownHostsFile=${KNOWN_HOSTS_FILE} -o StrictHostKeyChecking=yes"
 "${ANSIBLE_PLAYBOOK}" \
   -i "${inventory_file}" \
   "${playbook_file}" \
