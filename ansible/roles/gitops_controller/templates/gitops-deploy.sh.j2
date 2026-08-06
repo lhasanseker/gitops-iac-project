@@ -50,8 +50,12 @@ if [[ -f "${STATE_FILE}" ]]; then
 fi
 
 if [[ "${target_commit}" == "${last_successful_commit}" ]]; then
-  echo "Yeni commit yok: ${target_commit}"
-  exit 0
+  if curl -fsS --max-time 15 "${HEALTH_URL}" >/dev/null; then
+    echo "Yeni commit yok ve servis saglikli: ${target_commit}"
+    exit 0
+  fi
+
+  echo "Commit ayni ancak servis sagliksiz; mevcut durum yeniden uygulanacak."
 fi
 
 echo "GitOps dagitimi basladi: ${last_successful_commit:-ilk-kurulum} -> ${target_commit}"
