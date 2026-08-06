@@ -1,0 +1,60 @@
+---
+- name: Security | Guvenlik paketleri kurulu olsun
+  ansible.builtin.apt:
+    name: "{{ security_packages }}"
+    state: present
+
+- name: Security | SSH portuna izin ver
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Security | HTTP portuna izin ver
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+
+- name: Security | Gelen diger baglantilari reddet
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Security | Giden baglantilara izin ver
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Security | UFW guvenlik duvari aktif olsun
+  community.general.ufw:
+    state: enabled
+
+- name: Security | SSH icin Fail2ban ayarini olustur
+  ansible.builtin.template:
+    src: sshd.local.j2
+    dest: /etc/fail2ban/jail.d/sshd.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Security | Fail2ban servisini yeniden baslat
+
+- name: Security | Fail2ban servisi calisiyor olsun
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+- name: Security | Otomatik guvenlik guncellemelerini etkinlestir
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Security | Otomatik guncelleme servisi etkin olsun
+  ansible.builtin.systemd_service:
+    name: unattended-upgrades
+    state: started
+    enabled: true

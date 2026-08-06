@@ -1,0 +1,10 @@
+[Unit]
+Description=Uptime Kuma verisini duzenli yedekle
+
+[Timer]
+OnCalendar={{ uptime_kuma_backup_calendar }}
+RandomizedDelaySec={{ uptime_kuma_backup_random_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

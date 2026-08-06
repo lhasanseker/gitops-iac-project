@@ -1,0 +1,11 @@
+---
+common_dns_servers:
+  - 1.1.1.1
+  - 8.8.8.8
+
+common_packages:
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+  - unzip

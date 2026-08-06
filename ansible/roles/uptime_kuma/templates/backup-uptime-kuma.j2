@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONTAINER="{{ uptime_kuma_container_name }}"
+VOLUME="{{ uptime_kuma_volume_name }}"
+BACKUP_DIR="{{ uptime_kuma_backup_dir }}"
+ALPINE_IMAGE="{{ uptime_kuma_alpine_image }}"
+TEMP_BACKUP="${BACKUP_DIR}/uptime-kuma-backup.tmp.tar.gz"
+FINAL_BACKUP="${BACKUP_DIR}/uptime-kuma-latest.tar.gz"
+
+docker volume inspect "${VOLUME}" >/dev/null
+
+if [ ! -d "${BACKUP_DIR}" ]; then
+  echo "Yedek klasoru bulunamadi: ${BACKUP_DIR}"
+  exit 1
+fi
+
+WAS_RUNNING="false"
+
+if docker ps --quiet \
+  --filter "name=^/${CONTAINER}$" | grep -q .; then
+  WAS_RUNNING="true"
+  docker stop --time 30 "${CONTAINER}"
+fi
+
+restart_container() {
+  if [ "${WAS_RUNNING}" = "true" ]; then
+    docker start "${CONTAINER}" >/dev/null
+  fi
+}
+
+trap restart_container EXIT
+
+docker run --rm \
+  -v "${VOLUME}:/source:ro" \
+  -v "${BACKUP_DIR}:/backup" \
+  "${ALPINE_IMAGE}" \
+  sh -c \
+  'tar czf /backup/uptime-kuma-backup.tmp.tar.gz -C /source .'
+
+mv -f "${TEMP_BACKUP}" "${FINAL_BACKUP}"
+date -Is > "${BACKUP_DIR}/uptime-kuma-latest.txt"
+
+echo "Uptime Kuma yedegi olusturuldu: ${FINAL_BACKUP}"

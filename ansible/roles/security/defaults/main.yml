@@ -1,0 +1,10 @@
+---
+security_fail2ban_maxretry: 5
+security_fail2ban_findtime: 10m
+security_fail2ban_bantime: 1h
+
+security_packages:
+  - ufw
+  - fail2ban
+  - unattended-upgrades
+  - python3-systemd

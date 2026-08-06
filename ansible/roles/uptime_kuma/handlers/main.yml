@@ -1,0 +1,7 @@
+---
+- name: Uptime Kuma | Yedek zamanlayicisini yeniden baslat
+  ansible.builtin.systemd_service:
+    name: uptime-kuma-backup.timer
+    state: restarted
+    enabled: true
+    daemon_reload: true

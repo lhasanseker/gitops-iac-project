@@ -1,0 +1,188 @@
+---
+- name: Uptime Kuma | Uygulama klasoru mevcut olsun
+  ansible.builtin.file:
+    path: "{{ uptime_kuma_app_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Uptime Kuma | Compose dosyasini sunucuya kopyala
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../uptime-kuma/compose.yaml"
+    dest: "{{ uptime_kuma_app_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Uptime Kuma | Docker volume durumunu kontrol et
+  ansible.builtin.command:
+    cmd: "docker volume inspect {{ uptime_kuma_volume_name }}"
+  register: uptime_kuma_volume
+  failed_when: false
+  changed_when: false
+
+- name: Uptime Kuma | Docker volume olustur
+  ansible.builtin.command:
+    cmd: "docker volume create {{ uptime_kuma_volume_name }}"
+  when: uptime_kuma_volume.rc != 0
+
+- name: Uptime Kuma | Windows tarafinda eski yedek var mi kontrol et
+  ansible.builtin.stat:
+    path: "{{ uptime_kuma_backup_dir }}/uptime-kuma-latest.tar.gz"
+  register: uptime_kuma_backup
+
+- name: Uptime Kuma | Volume bos mu kontrol et
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      -v {{ uptime_kuma_volume_name }}:/data:ro
+      {{ uptime_kuma_alpine_image }}
+      sh -c 'test -n "$(find /data -mindepth 1 -print -quit)"'
+  register: uptime_kuma_volume_content
+  failed_when: uptime_kuma_volume_content.rc not in [0, 1]
+  changed_when: false
+
+- name: Uptime Kuma | Eski yedegi geri yukle
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      -v {{ uptime_kuma_volume_name }}:/restore
+      -v {{ uptime_kuma_backup_dir }}:/backup:ro
+      {{ uptime_kuma_alpine_image }}
+      sh -c
+      'tar xzf /backup/uptime-kuma-latest.tar.gz -C /restore'
+  when:
+    - uptime_kuma_volume_content.rc == 1
+    - uptime_kuma_backup.stat.exists
+
+- name: Uptime Kuma | Docker image mevcut mu kontrol et
+  ansible.builtin.command:
+    cmd: "docker image inspect {{ uptime_kuma_image }}"
+  register: uptime_kuma_image_status
+  failed_when: false
+  changed_when: false
+
+- name: Uptime Kuma | Docker image otomatik indir
+  ansible.builtin.command:
+    cmd: "timeout 900 docker pull {{ uptime_kuma_image }}"
+  register: uptime_kuma_image_pull
+  until: uptime_kuma_image_pull.rc == 0
+  retries: 5
+  delay: 20
+  when: uptime_kuma_image_status.rc != 0
+
+- name: Uptime Kuma | Docker image calisabilir mi kontrol et
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      --entrypoint /usr/bin/dumb-init
+      {{ uptime_kuma_image }}
+      --version
+  register: uptime_kuma_image_validation
+  failed_when: false
+  changed_when: false
+
+- name: Uptime Kuma | Bozuk image kullanan containeri kaldir
+  ansible.builtin.command:
+    cmd: docker compose down
+    chdir: "{{ uptime_kuma_app_dir }}"
+  when: uptime_kuma_image_validation.rc != 0
+
+- name: Uptime Kuma | Bozuk image dosyasini sil
+  ansible.builtin.command:
+    cmd: "docker image rm -f {{ uptime_kuma_image }}"
+  when: uptime_kuma_image_validation.rc != 0
+
+- name: Uptime Kuma | Docker image dosyasini yeniden indir
+  ansible.builtin.command:
+    cmd: "timeout 900 docker pull {{ uptime_kuma_image }}"
+  register: uptime_kuma_image_repull
+  until: uptime_kuma_image_repull.rc == 0
+  retries: 5
+  delay: 20
+  when: uptime_kuma_image_validation.rc != 0
+
+- name: Uptime Kuma | Docker image son kontrolunu yap
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      --entrypoint /usr/bin/dumb-init
+      {{ uptime_kuma_image }}
+      --version
+  register: uptime_kuma_image_final_validation
+  changed_when: false
+  failed_when: uptime_kuma_image_final_validation.rc != 0
+
+- name: Uptime Kuma | Containeri calistir
+  ansible.builtin.command:
+    cmd: docker compose up -d --remove-orphans
+    chdir: "{{ uptime_kuma_app_dir }}"
+  until: uptime_kuma_compose.rc == 0
+  retries: 3
+  delay: 10
+  register: uptime_kuma_compose
+  changed_when: >-
+    'Created' in uptime_kuma_compose_output or
+    'Started' in uptime_kuma_compose_output or
+    'Recreated' in uptime_kuma_compose_output or
+    'Pulled' in uptime_kuma_compose_output
+  vars:
+    uptime_kuma_compose_output: >-
+      {{ uptime_kuma_compose.stdout | default('') }}
+      {{ uptime_kuma_compose.stderr | default('') }}
+
+- name: Uptime Kuma | Hazir olana kadar bekle
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ uptime_kuma_local_port }}"
+    status_code:
+      - 200
+      - 302
+  register: uptime_kuma_http
+  until: uptime_kuma_http.status in [200, 302]
+  retries: 30
+  delay: 5
+
+- name: Uptime Kuma | Yedekleme scriptini olustur
+  ansible.builtin.template:
+    src: backup-uptime-kuma.j2
+    dest: /usr/local/sbin/backup-uptime-kuma
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Uptime Kuma | Yedek zamanlayicisini yeniden baslat
+
+- name: Uptime Kuma | Yedek servis dosyasini olustur
+  ansible.builtin.template:
+    src: uptime-kuma-backup.service.j2
+    dest: /etc/systemd/system/uptime-kuma-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Uptime Kuma | Yedek zamanlayicisini yeniden baslat
+
+- name: Uptime Kuma | Yedek zamanlayici dosyasini olustur
+  ansible.builtin.template:
+    src: uptime-kuma-backup.timer.j2
+    dest: /etc/systemd/system/uptime-kuma-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Uptime Kuma | Yedek zamanlayicisini yeniden baslat
+
+- name: Uptime Kuma | Bekleyen handler islemlerini calistir
+  ansible.builtin.meta: flush_handlers
+
+- name: Uptime Kuma | Yedek zamanlayicisi aktif olsun
+  ansible.builtin.systemd_service:
+    name: uptime-kuma-backup.timer
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Uptime Kuma | Nginx uzerinden erisimi kontrol et
+  ansible.builtin.uri:
+    url: http://127.0.0.1
+    status_code:
+      - 200
+      - 302
