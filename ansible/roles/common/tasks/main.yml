@@ -1,19 +1,56 @@
 ---
-- name: Common | Kalici DNS servisini olustur
+- name: Common | Eski DNS servis dosyasini kontrol et
+  ansible.builtin.stat:
+    path: /etc/systemd/system/gitops-dns.service
+  register: common_legacy_dns_service
+
+- name: Common | Eski DNS servisini kapat
+  ansible.builtin.systemd_service:
+    name: gitops-dns.service
+    state: stopped
+    enabled: false
+  when: common_legacy_dns_service.stat.exists
+
+- name: Common | Eski DNS servis dosyasini kaldir
+  ansible.builtin.file:
+    path: /etc/systemd/system/gitops-dns.service
+    state: absent
+  register: common_legacy_dns_service_removed
+
+- name: Common | systemd-resolved ayar klasoru mevcut olsun
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Common | Kalici DNS ayarini olustur
   ansible.builtin.template:
-    src: gitops-dns.service.j2
-    dest: /etc/systemd/system/gitops-dns.service
+    src: resolved.conf.j2
+    dest: /etc/systemd/resolved.conf.d/99-gitops-dns.conf
     owner: root
     group: root
     mode: "0644"
-  register: common_dns_service_file
+  register: common_dns_config
 
-- name: Common | Kalici DNS servisini etkinlestir ve uygula
+- name: Common | systemd servis dosyalarini yeniden yukle
   ansible.builtin.systemd_service:
-    name: gitops-dns.service
-    enabled: true
     daemon_reload: true
-    state: "{{ common_dns_service_file.changed | ternary('restarted', 'started') }}"
+  when: common_legacy_dns_service_removed.changed
+
+- name: Common | Degisen DNS ayarini uygula
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: restarted
+    enabled: true
+  when: common_dns_config.changed or common_legacy_dns_service_removed.changed
+
+- name: Common | DNS servisi etkin ve calisiyor olsun
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: started
+    enabled: true
 
 - name: Common | SSH servisi etkin ve calisiyor olsun
   ansible.builtin.systemd_service:

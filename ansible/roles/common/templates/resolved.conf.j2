@@ -1,0 +1,6 @@
+# Bu dosya Ansible tarafindan yonetilmektedir.
+
+[Resolve]
+DNS={{ common_dns_servers | join(' ') }}
+FallbackDNS={{ common_dns_fallback_servers | join(' ') }}
+Domains=~.
