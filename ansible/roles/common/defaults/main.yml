@@ -3,6 +3,10 @@ common_dns_servers:
   - 1.1.1.1
   - 8.8.8.8
 
+common_dns_fallback_servers:
+  - 9.9.9.9
+  - 149.112.112.112
+
 common_packages:
   - ca-certificates
   - curl
