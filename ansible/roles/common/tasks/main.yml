@@ -76,3 +76,4 @@
     mode: "0644"
     content: |
       Bu sunucu Ansible ve GitOps tarafindan yonetilmektedir.
+      
