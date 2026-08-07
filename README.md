@@ -1,174 +1,209 @@
 # GitOps & IaC Lab — Uptime Kuma
 
-Vagrant, Ansible ve Docker kullanarak yerel bir Ubuntu sunucusunu koddan oluşturan; Uptime Kuma'yı güvenli biçimde yayınlayan ve VM silinse bile uygulama verisini yedekten geri getiren bir altyapı otomasyonu projesi.
+Vagrant, Ansible, Docker ve pull tabanli GitOps kullanarak yerel bir Ubuntu
+sunucusunu koddan olusturan; Uptime Kuma'yi guvenli bicimde yayinlayan,
+degisiklikleri otomatik dagitan ve VM silinse bile uygulama verisini yedekten
+geri getiren bir altyapi otomasyonu projesi.
 
-> Projenin IaC, güvenlik, yedekleme ve felaket kurtarma aşamaları tamamlandı. GitHub Actions ve değişikliklerin sunucuya otomatik dağıtılması sonraki aşamadır.
+> Projenin IaC, guvenlik, CI, GitOps, self-healing, yedekleme ve felaket
+> kurtarma akislari uygulanmis ve gercek senaryolarla dogrulanmistir.
 
-## Projenin amacı
+## Projenin amaci
 
-Bu laboratuvar aşağıdaki senaryoyu otomatikleştirir:
+Bu laboratuvar asagidaki sureci otomatiklestirir:
 
-1. Vagrant ve VirtualBox ile Ubuntu VM oluşturulur.
-2. Ansible; Docker, Nginx ve güvenlik bileşenlerini kurar.
-3. Uptime Kuma, Docker Compose ile çalıştırılır.
-4. Uygulama portu dışarı açılmaz; erişim Nginx üzerinden sağlanır.
-5. Uptime Kuma verisi Docker volume içinde çalışır.
-6. Düzenli yedekler Windows tarafındaki kalıcı klasöre yazılır.
-7. VM silinip yeniden oluşturulduğunda Ansible yedeği otomatik geri yükler.
+1. Vagrant ve VirtualBox ile sabit IP'li Ubuntu VM olusturulur.
+2. Ansible rolleri temel paketleri, Docker, Nginx ve guvenlik bilesenlerini kurar.
+3. Uptime Kuma Docker Compose ile calistirilir.
+4. Uygulama portu disariya acilmaz; erisim Nginx uzerinden saglanir.
+5. Uptime Kuma verisi yerel Docker volume icinde tutulur.
+6. Duzenli yedekler Windows tarafindaki kalici klasore yazilir.
+7. GitHub Actions, altyapi kodunu merge edilmeden once dogrular.
+8. WSL'deki GitOps denetleyicisi `main` dalini takip ederek yeni commit'leri
+   otomatik uygular.
+9. Servis sagliksizsa commit degismese bile istenen durum yeniden uygulanir.
+10. VM silinip yeniden olusturuldugunda altyapi ve veriler otomatik geri gelir.
 
 ## Mimari
 
 ```mermaid
 flowchart TD
-    A["Windows proje klasörü"] --> B["Vagrant + VirtualBox"]
-    B --> C["Ubuntu 22.04 VM"]
-    D["WSL + Ansible"] --> C
-    C --> E["Nginx :80"]
-    E --> F["Uptime Kuma 127.0.0.1:3001"]
-    F --> G["Docker volume"]
-    G --> H["Systemd yedekleme"]
-    H --> I["Windows kalıcı yedek klasörü"]
+    GH["GitHub main dali"] --> CI["GitHub Actions CI"]
+    CI --> GC["WSL GitOps denetleyicisi"]
+    GC --> AN["Ansible rolleri"]
+    VG["Vagrant + VirtualBox"] --> VM["Ubuntu 22.04 VM"]
+    AN --> VM
+    VM --> NG["Nginx :80"]
+    NG --> UK["Uptime Kuma 127.0.0.1:3001"]
+    UK --> DV["Docker volume"]
+    DV --> BK["Systemd yedekleme"]
+    BK --> WP["Windows kalici yedek klasoru"]
 ```
 
-## Kullanılan teknolojiler
+GitHub sunucuya baglanti baslatmaz. WSL'deki denetleyici GitHub'i periyodik
+olarak kontrol eder; bu nedenle model **pull tabanlidir**.
+
+## Kullanilan teknolojiler
 
 - Vagrant ve VirtualBox
 - Ubuntu 22.04 LTS
-- Ansible
+- WSL 2
+- Ansible ve rol tabanli yapilandirma
 - Docker Engine ve Docker Compose
 - Uptime Kuma 2.5.0
 - Nginx reverse proxy
 - UFW ve Fail2ban
 - Unattended Upgrades
 - Systemd service ve timer
+- GitHub Actions
+- Pull tabanli GitOps ve self-healing
 
-## Dizin yapısı
+## Dizin yapisi
 
 ```text
 gitops-iac-project/
-├── Vagrantfile
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── ansible/
+│   ├── controller.yml
 │   ├── inventory.ini
 │   ├── keys/
 │   │   └── gitops_iac_vagrant.pub
+│   ├── roles/
+│   │   ├── common/
+│   │   ├── docker/
+│   │   ├── gitops_controller/
+│   │   ├── nginx/
+│   │   ├── security/
+│   │   └── uptime_kuma/
 │   └── site.yml
+├── docs/
+│   └── gitops-controller.md
 ├── persistent/
 │   ├── .gitignore
 │   └── uptime-kuma-backups/
-└── uptime-kuma/
-    └── compose.yaml
+├── uptime-kuma/
+│   └── compose.yaml
+├── .gitignore
+├── README.md
+└── Vagrantfile
 ```
 
-Özel SSH anahtarı ve Uptime Kuma yedekleri Git'e eklenmez.
+Ozel SSH anahtari, Uptime Kuma yedekleri ve Vagrant'in yerel durum dosyalari
+Git'e eklenmez.
 
-## Ön koşullar
+## On kosullar
 
-Windows tarafında:
+Windows tarafinda:
 
 - Windows 11
 - VirtualBox
 - Vagrant
 - WSL 2 ve Ubuntu
 
-WSL tarafında:
+WSL tarafinda:
 
 - Ansible
 - Git
+- GitHub CLI (`gh`)
 - SSH istemcisi
 
-Ansible playbook'u `community.general` koleksiyonundaki UFW modülünü kullanır:
+Gerekli Ansible koleksiyonu:
 
 ```bash
 ansible-galaxy collection install community.general
 ```
 
-## SSH anahtarını hazırlama
+## SSH anahtarini hazirlama
 
-Depoda yalnızca açık anahtar bulunur. Özel anahtar hiçbir zaman GitHub'a yüklenmemelidir.
-
-WSL'de yeni bir anahtar oluşturmak için:
+Depoda yalnizca acik anahtar bulunur. Ozel anahtar GitHub'a yuklenmemelidir.
 
 ```bash
 ssh-keygen -t ed25519 \
   -f ~/.ssh/gitops_iac_vagrant \
   -C "gitops-iac-vagrant"
-```
 
-Oluşan açık anahtarı projeye kopyalayın:
-
-```bash
 cp ~/.ssh/gitops_iac_vagrant.pub \
   /mnt/c/dev/gitops-iac-project/ansible/keys/gitops_iac_vagrant.pub
 ```
 
-`ansible/inventory.ini` içindeki `ansible_ssh_private_key_file` değerinin kendi WSL kullanıcı yolunuzu gösterdiğini doğrulayın.
+`ansible/inventory.ini` icindeki `ansible_ssh_private_key_file` degerinin kendi
+WSL kullanici yolunuzu gosterdigini dogrulayin.
 
-## Kurulum
+## Ilk kurulum
 
-### 1. VM'yi oluşturun
+### 1. VM'yi olusturun
 
 PowerShell'de:
 
 ```powershell
 cd C:\dev\gitops-iac-project
 vagrant up
-```
-
-VM'nin hazır olduğunu doğrulayın:
-
-```powershell
 vagrant status
 vagrant ssh -c "echo SSH_OK"
 ```
 
-### 2. Eski SSH parmak izini temizleyin
+### 2. SSH baglantisini dogrulayin
 
-Aynı IP ile daha önce başka bir VM kullanıldıysa WSL'de:
+Ayni IP daha once baska bir VM tarafindan kullanildiysa eski parmak izini
+temizleyin ve yeni kimligi kaydedin:
 
 ```bash
 ssh-keygen -f ~/.ssh/known_hosts -R 192.168.56.10
-```
+ssh-keyscan -H 192.168.56.10 >> ~/.ssh/known_hosts
 
-### 3. Ansible bağlantısını test edin
-
-```bash
 cd /mnt/c/dev/gitops-iac-project/ansible
 ansible servers -i inventory.ini -m ping
 ```
 
-Beklenen sonuç:
+Beklenen sonuc `ping: pong` degeridir.
 
-```text
-gitops-server | SUCCESS =>
-    "ping": "pong"
-```
-
-### 4. Playbook'u çalıştırın
+### 3. Ilk altyapi dagitimini yapin
 
 ```bash
+cd /mnt/c/dev/gitops-iac-project/ansible
 ansible-playbook -i inventory.ini site.yml --syntax-check
 ansible-playbook -i inventory.ini site.yml
 ```
 
-Kurulum tamamlandığında tarayıcıdan aşağıdaki adrese gidin:
+Uptime Kuma:
 
 ```text
 http://192.168.56.10
 ```
 
-## Güvenlik modeli
+## Rol tabanli Ansible yapisi
 
-| Bileşen | Yapılandırma |
+| Rol | Sorumluluk |
 |---|---|
-| SSH | TCP 22 açık |
-| HTTP | TCP 80 açık |
-| Uptime Kuma | Yalnızca `127.0.0.1:3001` üzerinde |
-| Diğer gelen trafik | UFW tarafından reddedilir |
-| SSH saldırı koruması | Fail2ban `sshd` jail |
-| Güvenlik güncellemeleri | Unattended Upgrades |
-| Container yetkisi | `no-new-privileges` |
+| `common` | Kalici DNS, SSH ve temel paketler |
+| `docker` | Docker deposu, paketleri ve servis durumu |
+| `nginx` | Web sunucusu ve reverse proxy |
+| `security` | UFW, Fail2ban ve otomatik guvenlik guncellemeleri |
+| `uptime_kuma` | Volume, geri yukleme, Compose ve yedekleme |
+| `gitops_controller` | WSL'deki pull tabanli dagitim denetleyicisi |
 
-Uptime Kuma'ya doğrudan `192.168.56.10:3001` üzerinden erişilemez. Dış istekler port 80'deki Nginx'e gelir ve Nginx isteği VM içindeki Uptime Kuma'ya aktarır.
+Ayni playbook tekrar calistirildiginda hedef sonuc:
+
+```text
+changed=0
+failed=0
+```
+
+## Guvenlik modeli
+
+| Bilesen | Yapilandirma |
+|---|---|
+| SSH | TCP 22 acik ve anahtar tabanli erisim |
+| HTTP | TCP 80 acik |
+| Uptime Kuma | Yalnizca `127.0.0.1:3001` uzerinde |
+| Diger gelen trafik | UFW tarafindan reddedilir |
+| SSH saldiri korumasi | Fail2ban `sshd` jail |
+| Guvenlik guncellemeleri | Unattended Upgrades |
+| Container yetkisi | `no-new-privileges` |
+| GitHub erisimi | Pull modeli; disaridan sunucuya baglanti yok |
+| SSH sunucu kimligi | GitOps'a ozel `known_hosts` dosyasi ve strict checking |
 
 Kontrol:
 
@@ -177,94 +212,149 @@ curl -I http://192.168.56.10
 curl --connect-timeout 3 http://192.168.56.10:3001
 ```
 
-İlk komut `200` veya `302`, ikinci komut bağlantı hatası vermelidir.
+Ilk komut `200` veya `302`, ikinci komut baglanti hatasi vermelidir.
 
-## Yedekleme ve geri yükleme
+## GitHub Actions CI
 
-Canlı Uptime Kuma verisi `uptime-kuma-data` adlı Docker volume içinde tutulur. Windows paylaşımlı klasörü canlı SQLite veritabanı için değil, sıkıştırılmış yedekler için kullanılır.
+Pull request ve `main` push islemlerinde `Infrastructure CI` workflow'u sunlari
+dogrular:
 
-Yedekleme zamanlayıcısı her gün yaklaşık olarak 00:00, 06:00, 12:00 ve 18:00 saatlerinde çalışır. `RandomizedDelaySec=5m` nedeniyle başlangıç birkaç dakika değişebilir.
+- YAML bicimi (`yamllint`)
+- Ansible playbook syntax'i
+- Ansible lint kurallari
+- Docker Compose yapisi
+- Vagrantfile Ruby syntax'i
 
-Manuel yedek almak için:
+Yalnizca CI'dan gecen PR'lar `main` dalina birlestirilir.
+
+## Pull tabanli GitOps
+
+WSL'deki systemd timer yaklasik dakikada bir GitHub `main` dalini kontrol eder.
+Yeni commit bulundugunda:
+
+1. Commit'in izole bir kopyasi olusturulur.
+2. Ansible syntax kontrolu yapilir.
+3. `ansible/site.yml` uygulanir.
+4. Uptime Kuma saglik kontrolu yapilir.
+5. Basarili commit SHA'si durum dosyasina yazilir.
 
 ```bash
-ansible servers -i inventory.ini -b \
-  -m command -a "/usr/local/sbin/backup-uptime-kuma"
+systemctl status gitops-deploy.timer --no-pager
+sudo journalctl -u gitops-deploy.service -n 100 --no-pager
+sudo cat /var/lib/gitops-controller/last-successful-commit
 ```
 
-Yedek içeriğini doğrulamak için:
+Ayrintili kurulum ve isletim bilgisi:
+[docs/gitops-controller.md](docs/gitops-controller.md)
+
+## Self-healing
+
+Commit degismese bile Uptime Kuma sagliksizsa denetleyici Ansible'i yeniden
+uygular. Bu davranis container elle durdurularak dogrulanmistir:
 
 ```bash
+ansible servers -i ansible/inventory.ini -b \
+  -m command -a "docker stop uptime-kuma"
+```
+
+Bir sonraki GitOps dongusunde container yeniden baslatilir ve HTTP saglik
+kontrolu tekrar basarili olur.
+
+## Kalici DNS
+
+VM'nin DHCP tarafindan aldigi DNS sunucusu erisilemez olsa bile altyapi,
+`systemd-resolved` drop-in dosyasiyla belirlenen DNS sunucularini kullanir:
+
+```text
+/etc/systemd/resolved.conf.d/99-gitops-dns.conf
+```
+
+Bu ayar VM yeniden baslatildiginda korunur ve Docker container'larinin alan
+adlarini cozebilmesini saglar.
+
+```bash
+resolvectl query example.com
+docker exec uptime-kuma getent hosts example.com
+```
+
+## Yedekleme ve geri yukleme
+
+Canli Uptime Kuma verisi `uptime-kuma-data` Docker volume'unda tutulur. Windows
+paylasimli klasoru canli SQLite veritabani icin degil, sikistirilmis yedekler
+icin kullanilir.
+
+Yedekleme timer'i her gun yaklasik 00:00, 06:00, 12:00 ve 18:00 saatlerinde
+calisir. `RandomizedDelaySec=5m` nedeniyle baslangic birkac dakika degisebilir.
+
+```bash
+cd /mnt/c/dev/gitops-iac-project/ansible
+
+ansible servers -i inventory.ini -b \
+  -m command -a "/usr/local/sbin/backup-uptime-kuma"
+
 tar -tzf \
   /mnt/c/dev/gitops-iac-project/persistent/uptime-kuma-backups/uptime-kuma-latest.tar.gz \
   | grep -E '(^|/)kuma\.db$'
 ```
 
-Normal `vagrant destroy` işleminden önce son yedek otomatik alınır. Yedekleme başarısız olursa VM'nin silinmesi durdurulur.
+Normal `vagrant destroy` isleminden once son yedek otomatik alinir. Yedekleme
+basarisiz olursa VM'nin silinmesi durdurulur.
 
-## Felaket kurtarma testi
+## Otomatik felaket kurtarma testi
 
-1. Uptime Kuma'da yönetici hesabı ve test monitörü oluşturun.
-2. Manuel yedek alın ve `kuma.db` dosyasını doğrulayın.
-3. PowerShell'de VM'yi silip yeniden oluşturun:
+Test edilen senaryo:
 
-```powershell
-cd C:\dev\gitops-iac-project
-vagrant destroy
-vagrant up
-```
+1. Uptime Kuma'da yonetici hesabi ve `TEST` monitoru olusturuldu.
+2. Yedegin `kuma.db` icerdigi dogrulandi.
+3. VM `vagrant destroy` ile tamamen silindi.
+4. `vagrant up` ile bos bir VM olusturuldu.
+5. WSL GitOps denetleyicisi servisin sagliksiz oldugunu algiladi.
+6. Ansible tum altyapiyi yeniden kurdu.
+7. Docker volume yedekten otomatik geri yuklendi.
+8. Eski hesap, monitor ve olay gecmisi geri geldi.
+9. Uptime Kuma yeniden `HTTP 302` ve `200 - OK` verdi.
 
-4. WSL'de eski SSH parmak izini temizleyin ve playbook'u çalıştırın:
+Bu asamada elle `ansible-playbook` calistirilmadi; kurtarma pull tabanli GitOps
+tarafindan gerceklestirildi.
 
-```bash
-ssh-keygen -f ~/.ssh/known_hosts -R 192.168.56.10
-cd /mnt/c/dev/gitops-iac-project/ansible
-ansible-playbook -i inventory.ini site.yml
-```
+## Dogrulanan sonuclar
 
-Volume boş ve yedek mevcutsa Ansible veriyi otomatik geri yükler. Uptime Kuma açıldığında eski hesabın ve test monitörünün görünmesi beklenir.
+- VM sifirdan basariyla olusturuldu.
+- Ansible rolleri kurulumu hatasiz tamamladi.
+- Idempotence testinde `changed=0 failed=0` elde edildi.
+- Uptime Kuma yalnizca Nginx uzerinden erisilebilir durumda.
+- Yedek icinde `kuma.db` dogrulandi.
+- VM silinip yeniden olusturulduktan sonra eski hesap ve monitor geri geldi.
+- CI kontrolleri PR akisi icinde basariyla calisti.
+- Merge edilen commit GitOps tarafindan otomatik dagitildi.
+- Durdurulan container self-healing ile yeniden baslatildi.
+- VM ve container DNS cozumlemesi kalici hale getirildi.
 
-## İdempotence testi
+## Sinirlar
 
-Playbook'u değişiklik yapmadan ikinci kez çalıştırın:
+- Bu proje yerel laboratuvar ortamidir; internete acik production sunucusu degildir.
+- HTTP kullanilir; alan adi ve TLS/HTTPS henuz yapilandirilmamistir.
+- GitOps denetleyicisinin calismasi icin Windows ve WSL acik olmalidir.
+- Yedekler ayni fiziksel bilgisayarda tutulur; harici/off-site yedek yoktur.
 
-```bash
-ansible-playbook -i inventory.ini site.yml
-```
-
-Hedef sonuç:
-
-```text
-changed=0
-failed=0
-```
-
-Bu sonuç, altyapının aynı playbook tekrar çalıştırıldığında gereksiz değişiklik üretmediğini gösterir.
-
-## Doğrulanan sonuçlar
-
-- VM sıfırdan başarıyla oluşturuldu.
-- Ansible kurulumu hatasız tamamladı.
-- İkinci playbook çalıştırmasında `changed=0 failed=0` elde edildi.
-- Uptime Kuma yalnızca Nginx üzerinden erişilebilir durumda.
-- Yedek içinde `kuma.db` doğrulandı.
-- VM silinip yeniden oluşturulduktan sonra eski hesap ve test monitörü geri geldi.
-
-## Yol haritası
+## Yol haritasi
 
 - [x] Vagrant ile tekrarlanabilir VM
-- [x] Ansible ile sunucu yapılandırması
+- [x] Rol tabanli Ansible yapilandirmasi
 - [x] Docker Compose ile Uptime Kuma
 - [x] Nginx reverse proxy
-- [x] UFW, Fail2ban ve otomatik güvenlik güncellemeleri
-- [x] Otomatik yedekleme ve geri yükleme
-- [x] VM silme ve felaket kurtarma testi
-- [x] İdempotence testi
-- [ ] Ansible kodunu role yapısına ayırma
-- [ ] GitHub Actions ile YAML ve Ansible kontrolleri
-- [ ] Git değişikliklerinin sunucuya otomatik dağıtılması
-- [ ] HTTPS ve alan adı desteği
+- [x] UFW, Fail2ban ve otomatik guvenlik guncellemeleri
+- [x] Otomatik yedekleme ve geri yukleme
+- [x] Idempotence testi
+- [x] GitHub Actions altyapi kontrolleri
+- [x] Pull tabanli otomatik GitOps dagitimi
+- [x] Self-healing testi
+- [x] VM silme ve otomatik felaket kurtarma testi
+- [x] Kalici VM ve container DNS yapilandirmasi
+- [ ] Alan adi ve HTTPS/TLS
+- [ ] Harici/off-site yedekleme
+- [ ] Production sunucu uyarlamasi
 
-## Proje durumu
+## Lisans
 
-Bu depo şu anda tekrarlanabilir altyapı kurulumu ve kalıcı veri kurtarma sağlayan çalışan bir IaC laboratuvarıdır. Tam GitOps akışı, GitHub Actions ve otomatik dağıtım aşamalarının eklenmesiyle tamamlanacaktır.
+Bu proje egitim ve laboratuvar amaciyla hazirlanmistir.
