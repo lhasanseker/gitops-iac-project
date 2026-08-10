@@ -333,28 +333,10 @@ tarafindan gerceklestirildi.
 ## Sinirlar
 
 - Bu proje yerel laboratuvar ortamidir; internete acik production sunucusu degildir.
-- HTTP kullanilir; alan adi ve TLS/HTTPS henuz yapilandirilmamistir.
 - GitOps denetleyicisinin calismasi icin Windows ve WSL acik olmalidir.
 - Yedekler ayni fiziksel bilgisayarda tutulur; harici/off-site yedek yoktur.
 
-## Yol haritasi
-
-- [x] Vagrant ile tekrarlanabilir VM
-- [x] Rol tabanli Ansible yapilandirmasi
-- [x] Docker Compose ile Uptime Kuma
-- [x] Nginx reverse proxy
-- [x] UFW, Fail2ban ve otomatik guvenlik guncellemeleri
-- [x] Otomatik yedekleme ve geri yukleme
-- [x] Idempotence testi
-- [x] GitHub Actions altyapi kontrolleri
-- [x] Pull tabanli otomatik GitOps dagitimi
-- [x] Self-healing testi
-- [x] VM silme ve otomatik felaket kurtarma testi
-- [x] Kalici VM ve container DNS yapilandirmasi
-- [ ] Alan adi ve HTTPS/TLS
-- [ ] Harici/off-site yedekleme
-- [ ] Production sunucu uyarlamasi
 
 ## Lisans
 
-Bu proje egitim ve laboratuvar amaciyla hazirlanmistir.
+Bu proje egitim ve staj amaciyla hazirlanmistir.
