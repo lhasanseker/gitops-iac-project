@@ -10,7 +10,6 @@ Vagrant.configure("2") do |config|
   config.vm.hostname = "gitops-server"
 
   config.vm.network "private_network", ip: "192.168.56.10"
-
   config.vm.provider "virtualbox" do |vb|
     vb.name = "gitops-iac-server"
     vb.memory = 2048
