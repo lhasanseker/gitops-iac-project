@@ -1,0 +1,11 @@
+server_name = "gitops-server"
+
+server_type = "REPLACE_ME"
+
+location = "REPLACE_ME"
+
+image = "ubuntu-24.04"
+
+ssh_public_key_path = "~/.ssh/gitops_iac_vagrant.pub"
+
+ssh_allowed_cidr = "REPLACE_WITH_YOUR_PUBLIC_IP/32"
