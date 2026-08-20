@@ -340,3 +340,20 @@ tarafindan gerceklestirildi.
 ## Lisans
 
 Bu proje egitim ve staj görevi amaciyla hazirlanmistir.
+
+## Terraform ile opsiyonel cloud provisioning
+
+Projede Vagrant tabanli yerel laboratuvara ek olarak `terraform/` dizininde Hetzner Cloud icin opsiyonel altyapi tanimi bulunur.
+
+Terraform ile:
+
+- Cloud provider ve surumu tanimlanir.
+- SSH public key kaynagi tanimlanir.
+- SSH ve HTTP kurallarini iceren firewall tanimlanir.
+- Ubuntu tabanli cloud server kaynagi tanimlanir.
+- Server IP ve durum bilgileri output olarak alinir.
+- Gercek ortam degerleri `terraform.tfvars` ile Git disinda tutulur.
+
+CI asamasinda herhangi bir ucretli cloud kaynagi olusturulmaz. Yalnizca Terraform kodu format ve yapilandirma acisindan dogrulanir.
+
+Bu projede `terraform apply` calistirilmamistir. Cloud provisioning opsiyonel olarak tanimlanmistir; test edilmis calisan ortam Vagrant + VirtualBox laboratuvaridir.
